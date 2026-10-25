@@ -1,0 +1,13 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { Badge } from "@/components/badge";
+import { formatINR } from "@/lib/format";
+import { getCampaign } from "@/lib/content";
+
+export default async function CampaignPage({ params }: { params: Promise<{ slug: string }> }) {
+  const campaign = await getCampaign((await params).slug); if (!campaign) notFound();
+  const raised = "raisedAmount" in campaign ? campaign.raisedAmount : campaign.donations.reduce((total, donation) => total + donation.amount, 0);
+  const percentage = Math.min(100, Math.round((raised / campaign.targetAmount) * 100));
+  const demo = "isDemo" in campaign && campaign.isDemo;
+  return <><section className="page-hero"><div className="shell"><div className="card-footer"><Badge>{campaign.category}</Badge>{demo && <Badge tone="demo">Fictional demonstration</Badge>}</div><h1>{campaign.title}</h1><p>{campaign.description}</p></div></section><section className="content"><div className="shell detail-grid"><article><div className="card"><h2>What this project is raising for</h2><p className="detail-copy">{"intendedUse" in campaign && campaign.intendedUse ? campaign.intendedUse : "This demonstration page explains where an eligible campaign would publish its intended use of funds. It is not evidence of a real fundraising request."}</p></div><div className="section"><h2>Updates and milestones</h2>{"milestones" in campaign && campaign.milestones.length ? <div className="grid">{campaign.milestones.map((milestone) => <div className="card" key={milestone.id}><h3>{milestone.title}</h3><p>{milestone.description}</p></div>)}</div> : <div className="empty"><h3>No public updates yet</h3><p>Organizations can add milestones and approved supporting evidence as the work progresses.</p></div>}</div><div className="card"><h2>Transparency notes</h2><p>Donation totals only include confirmed, non-simulated provider payments. Public expense records show available evidence and review status; they do not prove that spending was honest or guarantee outcomes.</p>{!demo && <Link className="text-link" href={`/transparency/${campaign.id}`}>View financial transparency →</Link>}</div></article><aside className="card sticky-card"><p className="eyebrow">Funding progress</p><h2>{formatINR(raised)}</h2><p>of {formatINR(campaign.targetAmount)} target</p><div className="progress"><span style={{ width: `${percentage}%` }} /></div><p className="helper-text">{percentage}% of target. {demo ? "Demonstration amounts are not real funds." : "Only verified payments count here."}</p>{demo ? <Link className="button" href="/sign-up">Set up the demo</Link> : <Link className="button" href={`/donate/${campaign.id}`}>Donate securely</Link>}</aside></div></section></>;
+}

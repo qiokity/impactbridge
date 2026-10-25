@@ -1,0 +1,3 @@
+export function LegalTemplate({ title, sections }: { title: string; sections: Array<[string, string]> }) {
+  return <section className="content-narrow"><p className="eyebrow">Template — legal review required</p><h1>{title}</h1><p className="notice">This is an initial product template, not legal advice and not a statement of completed legal compliance. Obtain review appropriate to the organization, jurisdiction, payment arrangement, and users before production launch.</p>{sections.map(([heading, text]) => <section className="card" key={heading}><h2>{heading}</h2><p>{text}</p></section>)}</section>;
+}

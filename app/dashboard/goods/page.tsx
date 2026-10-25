@@ -1,0 +1,15 @@
+import { redirect } from "next/navigation";
+import { DashboardNav } from "@/components/dashboard-nav";
+import { getSessionUser } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { createGoodsListingAction, acceptGoodsClaimAction } from "@/lib/actions";
+import { Badge } from "@/components/badge";
+
+export const dynamic = "force-dynamic";
+type GoodsClaimRow = { id: string; quantity: number; claimant: { name: string | null } };
+type GoodsListingRow = { id: string; title: string; status: string; quantity: number; reservedQuantity: number; claims: GoodsClaimRow[] };
+export default async function GoodsDashboardPage() {
+  const user = await getSessionUser(); if (!user) redirect("/sign-in"); let listings: GoodsListingRow[] = [];
+  try { listings = await db().goodsListing.findMany({ where: { ownerId: user.id }, include: { claims: { where: { status: "PENDING" }, include: { claimant: { select: { name: true } } } } }, orderBy: { createdAt: "desc" } }); } catch { /* database setup absent */ }
+  return <section className="content"><div className="shell"><h1>Goods offers and claims</h1><div className="dashboard-grid"><DashboardNav /><div className="grid"><div className="form-card"><h2>Offer an item</h2><form action={createGoodsListingAction} className="form-grid"><div className="field"><label>Title</label><input name="title" required /></div><div className="field"><label>Category</label><select name="category"><option>Food</option><option>Clothes</option><option>Books</option><option>Furniture</option><option>Computers and electronics</option><option>Household essentials</option></select></div><div className="field"><label>Condition</label><input name="condition" placeholder="New, good, used" /></div><div className="field"><label>Quantity</label><input name="quantity" type="number" min="1" defaultValue="1" required /></div><div className="field"><label>Unit</label><input name="unit" defaultValue="item" required /></div><div className="field"><label>Approximate pickup area</label><input name="pickupArea" required /></div><div className="field"><label>Expiry (food only)</label><input name="expiresAt" type="datetime-local" /></div><div className="field form-wide"><label>Description</label><textarea name="description" required /></div><div className="field form-wide"><label>Storage/safety notes</label><textarea name="storageNotes" /></div><div className="form-wide"><button className="button">Submit for moderation</button></div></form></div><div className="card"><h2>Your listings</h2>{listings.map((listing) => <div className="ledger-row" key={listing.id}><span><strong>{listing.title}</strong><br /><Badge>{listing.status}</Badge></span><span>{listing.quantity - listing.reservedQuantity} available</span><span>{listing.claims.map((claim) => <form action={acceptGoodsClaimAction} key={claim.id}><input type="hidden" name="claimId" value={claim.id} /><button className="button button-small">Accept {claim.quantity} for {claim.claimant.name ?? "recipient"}</button></form>)}</span></div>)}{!listings.length && <p>No items listed yet.</p>}</div></div></div></div></section>;
+}

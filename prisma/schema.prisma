@@ -1,0 +1,716 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  SUPPORTER
+  REQUESTER
+  VOLUNTEER
+  ORGANIZATION_REP
+  MODERATOR
+  ADMIN
+}
+enum VerificationStatus {
+  DRAFT
+  PENDING
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+enum CampaignStatus {
+  DRAFT
+  PENDING_REVIEW
+  ACTIVE
+  PAUSED
+  COMPLETED
+  REJECTED
+  ARCHIVED
+}
+enum PaymentStatus {
+  CREATED
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+enum DonationStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+enum LedgerType {
+  DONATION_CONFIRMED
+  REFUND
+  EXPENSE_APPROVED
+  ADJUSTMENT
+}
+enum ReviewStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  NEEDS_CHANGES
+}
+enum GoodsStatus {
+  DRAFT
+  PENDING_REVIEW
+  AVAILABLE
+  RESERVED
+  FULFILLED
+  EXPIRED
+  REJECTED
+  CANCELLED
+}
+enum ClaimStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+  FULFILLED
+  DISPUTED
+}
+enum ReportStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  ACCEPTED
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  REJECTED
+  REOPENED
+}
+enum RequestStatus {
+  DRAFT
+  PENDING_REVIEW
+  NEEDS_CHANGES
+  VERIFIED
+  APPROVED
+  REJECTED
+  FUNDING_ACTIVE
+  IN_PROGRESS
+  FULFILLED
+  CLOSED
+}
+enum ApplicationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WAITLISTED
+  WITHDRAWN
+  COMPLETED
+}
+enum EmergencyStatus {
+  REPORTED
+  UNDER_VERIFICATION
+  VERIFIED_FOR_PUBLICATION
+  FUNDING_ACTIVE
+  ASSISTANCE_IN_PROGRESS
+  FULFILLED
+  CLOSED
+  REJECTED
+}
+enum EvidenceVisibility {
+  PRIVATE
+  REVIEWER_ONLY
+  PUBLIC_REDACTED
+}
+enum NotificationType {
+  ACCOUNT
+  REQUEST_REVIEW
+  PAYMENT
+  GOODS
+  VOLUNTEER
+  ORGANIZATION
+  MODERATION
+  SYSTEM
+}
+
+model User {
+  id                  String            @id @default(uuid())
+  email               String            @unique
+  passwordHash        String?
+  name                String?
+  role                Role              @default(SUPPORTER)
+  emailVerifiedAt     DateTime?
+  isSuspended         Boolean           @default(false)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  profile             Profile?
+  preferences         UserPreferences?
+  sessions            Session[]
+  passwordResetTokens PasswordResetToken[]
+  ownedOrganizations  Organization[]    @relation("OrganizationOwner")
+  memberships         OrganizationMembership[]
+  campaignsCreated    Campaign[]        @relation("CampaignCreator")
+  donations           Donation[]        @relation("Donor")
+  paymentAttempts     PaymentAttempt[]  @relation("PaymentUser")
+  expensesSubmitted   Expense[]         @relation("ExpenseSubmitter")
+  expensesReviewed    Expense[]         @relation("ExpenseReviewer")
+  goodsListings       GoodsListing[]    @relation("GoodsOwner")
+  goodsClaims         GoodsClaim[]      @relation("GoodsClaimant")
+  communityReports    CommunityReport[] @relation("ReportAuthor")
+  reportVotes         ReportVote[]
+  reportComments      ReportComment[]
+  educationRequests   EducationRequest[] @relation("EducationRequester")
+  volunteerProfile    VolunteerProfile?
+  volunteerApplications VolunteerApplication[]
+  volunteerAssignments VolunteerAssignment[] @relation("VolunteerAssignmentUser")
+  emergencyRequests   EmergencyRequest[] @relation("EmergencyRequester")
+  emergencyReviews    EmergencyRequest[] @relation("EmergencyReviewer")
+  requestEvidence     RequestEvidence[] @relation("EvidenceUploader")
+  notifications       Notification[]
+  abuseReports        AbuseReport[]     @relation("AbuseReporter")
+  moderationActions   ModerationAction[] @relation("ModeratorActor")
+  auditLogs           AuditLog[]        @relation("AuditActor")
+  @@index([role, isSuspended])
+}
+
+model Profile {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  phone          String?
+  city           String?
+  state          String?
+  bio            String?  @db.Text
+  avatarUrl      String?
+  publicName     String?
+  consentAt      DateTime?
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserPreferences {
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+  showDonorName         Boolean  @default(false)
+  emailNotifications    Boolean  @default(true)
+  marketingEmails       Boolean  @default(false)
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, expiresAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Organization {
+  id           String             @id @default(uuid())
+  ownerId      String
+  name         String
+  slug         String             @unique
+  description  String?            @db.Text
+  website      String?
+  city         String?
+  state        String?
+  logoUrl      String?
+  status       VerificationStatus @default(DRAFT)
+  isDemo       Boolean            @default(false)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  owner        User               @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  memberships  OrganizationMembership[]
+  verifications OrganizationVerification[]
+  campaigns    Campaign[]
+  goodsListings GoodsListing[]
+  opportunities VolunteerOpportunity[]
+  assignedReports CommunityReport[] @relation("AssignedOrganization")
+  @@index([status, slug])
+}
+
+model OrganizationMembership {
+  id             String       @id @default(uuid())
+  userId         String
+  organizationId String
+  role           Role         @default(ORGANIZATION_REP)
+  createdAt      DateTime     @default(now())
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  @@unique([userId, organizationId])
+  @@index([organizationId, role])
+}
+
+model OrganizationVerification {
+  id             String       @id @default(uuid())
+  organizationId String
+  status         ReviewStatus @default(PENDING)
+  documentKey    String
+  notes          String?      @db.Text
+  reviewedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  @@index([status, createdAt])
+}
+
+model Campaign {
+  id                String         @id @default(uuid())
+  organizationId    String
+  createdById       String
+  title             String
+  slug              String         @unique
+  description       String         @db.Text
+  category          String
+  coverImageUrl     String?
+  targetAmount      Int
+  currency          String         @default("INR") @db.Char(3)
+  startsAt          DateTime?
+  endsAt            DateTime?
+  status            CampaignStatus @default(DRAFT)
+  verificationStatus VerificationStatus @default(PENDING)
+  intendedUse       String?        @db.Text
+  isDemo            Boolean        @default(false)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  organization      Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdBy         User           @relation("CampaignCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  milestones        CampaignMilestone[]
+  donations         Donation[]
+  paymentAttempts   PaymentAttempt[]
+  ledgerEntries     FinancialLedgerEntry[]
+  expenses          Expense[]
+  @@index([status, category, createdAt])
+  @@index([organizationId, status])
+}
+
+model CampaignMilestone {
+  id          String   @id @default(uuid())
+  campaignId  String
+  title       String
+  description String?  @db.Text
+  reachedAt   DateTime?
+  evidenceUrl String?
+  isPublic    Boolean  @default(false)
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+}
+
+model PaymentAttempt {
+  id                String        @id @default(uuid())
+  campaignId        String
+  userId            String?
+  amount            Int
+  currency          String        @default("INR") @db.Char(3)
+  provider          String
+  providerOrderId   String?       @unique
+  providerPaymentId String?       @unique
+  status            PaymentStatus @default(CREATED)
+  isSimulated       Boolean       @default(false)
+  isAnonymous       Boolean       @default(true)
+  idempotencyKey    String        @unique
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  campaign          Campaign      @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  user              User?         @relation("PaymentUser", fields: [userId], references: [id], onDelete: SetNull)
+  donation          Donation?
+  events            PaymentEvent[]
+  @@index([campaignId, status])
+  @@index([userId, createdAt])
+}
+
+model PaymentEvent {
+  id               String          @id @default(uuid())
+  paymentAttemptId String?
+  providerEventId  String          @unique
+  eventType        String
+  payload          Json
+  processedAt      DateTime?
+  createdAt        DateTime        @default(now())
+  paymentAttempt   PaymentAttempt? @relation(fields: [paymentAttemptId], references: [id], onDelete: SetNull)
+  @@index([paymentAttemptId, createdAt])
+}
+
+model Donation {
+  id               String         @id @default(uuid())
+  campaignId       String
+  donorId          String?
+  paymentAttemptId String?        @unique
+  amount           Int
+  currency         String         @default("INR") @db.Char(3)
+  status           DonationStatus @default(PENDING)
+  isAnonymous      Boolean        @default(true)
+  isSimulated      Boolean        @default(false)
+  receiptNumber    String         @unique
+  confirmedAt      DateTime?
+  createdAt        DateTime       @default(now())
+  campaign         Campaign       @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  donor            User?          @relation("Donor", fields: [donorId], references: [id], onDelete: SetNull)
+  paymentAttempt   PaymentAttempt? @relation(fields: [paymentAttemptId], references: [id], onDelete: SetNull)
+  refunds          Refund[]
+  ledgerEntries    FinancialLedgerEntry[]
+  @@index([campaignId, status, confirmedAt])
+  @@index([donorId, createdAt])
+}
+
+model Refund {
+  id          String   @id @default(uuid())
+  donationId  String
+  amount      Int
+  reason      String?
+  providerRef String?  @unique
+  status      PaymentStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  donation    Donation @relation(fields: [donationId], references: [id], onDelete: Restrict)
+  ledgerEntries FinancialLedgerEntry[]
+}
+
+model FinancialLedgerEntry {
+  id          String     @id @default(uuid())
+  campaignId  String
+  donationId  String?
+  refundId    String?
+  expenseId   String?
+  type        LedgerType
+  amount      Int
+  currency    String     @default("INR") @db.Char(3)
+  description String?    @db.Text
+  isSimulated Boolean    @default(false)
+  occurredAt  DateTime   @default(now())
+  createdAt   DateTime   @default(now())
+  campaign    Campaign   @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  donation    Donation?  @relation(fields: [donationId], references: [id], onDelete: Restrict)
+  refund      Refund?    @relation(fields: [refundId], references: [id], onDelete: Restrict)
+  expense     Expense?   @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+  @@index([campaignId, occurredAt])
+  @@index([type, occurredAt])
+}
+
+model Expense {
+  id           String       @id @default(uuid())
+  campaignId   String
+  submittedById String
+  reviewedById String?
+  category     String
+  description  String       @db.Text
+  amount       Int
+  currency     String       @default("INR") @db.Char(3)
+  vendor       String?
+  transactionDate DateTime
+  status       ReviewStatus @default(PENDING)
+  reviewerNote String?      @db.Text
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  campaign     Campaign     @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  submittedBy  User         @relation("ExpenseSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+  reviewedBy   User?        @relation("ExpenseReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  evidence     ExpenseEvidence[]
+  ledgerEntries FinancialLedgerEntry[]
+  @@index([status, createdAt])
+  @@index([campaignId, status])
+}
+
+model ExpenseEvidence {
+  id          String   @id @default(uuid())
+  expenseId   String
+  storageKey  String
+  mimeType    String
+  isPublic    Boolean  @default(false)
+  redactedUrl String?
+  createdAt   DateTime @default(now())
+  expense     Expense  @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+}
+
+model GoodsListing {
+  id              String      @id @default(uuid())
+  ownerId         String
+  organizationId  String?
+  title           String
+  description     String      @db.Text
+  category        String
+  condition       String?
+  quantity        Int
+  reservedQuantity Int         @default(0)
+  unit            String      @default("item")
+  pickupArea      String
+  expiresAt       DateTime?
+  storageNotes    String?
+  deliveryOptions String[]    @default([])
+  photoUrls       String[]    @default([])
+  status          GoodsStatus @default(DRAFT)
+  isDemo          Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  owner           User        @relation("GoodsOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  claims          GoodsClaim[]
+  @@index([status, category, pickupArea])
+  @@index([ownerId, status])
+}
+
+model GoodsClaim {
+  id          String      @id @default(uuid())
+  listingId   String
+  claimantId  String
+  quantity    Int
+  note        String?     @db.Text
+  status      ClaimStatus @default(PENDING)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  listing     GoodsListing @relation(fields: [listingId], references: [id], onDelete: Restrict)
+  claimant    User        @relation("GoodsClaimant", fields: [claimantId], references: [id], onDelete: Restrict)
+  fulfillment GoodsFulfillment?
+  @@index([listingId, status])
+  @@index([claimantId, status])
+}
+
+model GoodsFulfillment {
+  id          String     @id @default(uuid())
+  claimId     String     @unique
+  donorConfirmedAt DateTime?
+  claimantConfirmedAt DateTime?
+  pickupNotes String?    @db.Text
+  completedAt DateTime?
+  claim       GoodsClaim @relation(fields: [claimId], references: [id], onDelete: Restrict)
+}
+
+model CommunityReport {
+  id              String       @id @default(uuid())
+  authorId        String
+  assignedOrganizationId String?
+  title           String
+  description     String       @db.Text
+  category        String
+  severity        Int
+  approximateArea String
+  latitude        Float?
+  longitude       Float?
+  photoUrls       String[]     @default([])
+  status          ReportStatus @default(SUBMITTED)
+  displayName     String?
+  isDemo          Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  author          User         @relation("ReportAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  assignedOrganization Organization? @relation("AssignedOrganization", fields: [assignedOrganizationId], references: [id], onDelete: SetNull)
+  votes           ReportVote[]
+  comments        ReportComment[]
+  history         ReportStatusHistory[]
+  @@index([status, category, createdAt])
+  @@index([approximateArea, status])
+}
+
+model ReportVote {
+  id        String          @id @default(uuid())
+  reportId  String
+  userId    String
+  createdAt DateTime        @default(now())
+  report    CommunityReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([reportId, userId])
+}
+
+model ReportComment {
+  id        String          @id @default(uuid())
+  reportId  String
+  userId    String
+  body      String          @db.Text
+  status    ReviewStatus    @default(PENDING)
+  createdAt DateTime        @default(now())
+  report    CommunityReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@index([reportId, status])
+}
+
+model ReportStatusHistory {
+  id        String       @id @default(uuid())
+  reportId  String
+  status    ReportStatus
+  note      String?      @db.Text
+  createdAt DateTime     @default(now())
+  report    CommunityReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  @@index([reportId, createdAt])
+}
+
+model EducationRequest {
+  id              String        @id @default(uuid())
+  requesterId     String
+  title           String
+  needDescription String        @db.Text
+  educationLevel  String
+  generalLocation String
+  requestedAmount Int?
+  requestedItem   String?
+  currency        String        @default("INR") @db.Char(3)
+  guardianConsent Boolean       @default(false)
+  status          RequestStatus @default(DRAFT)
+  isDemo          Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  requester       User          @relation("EducationRequester", fields: [requesterId], references: [id], onDelete: Restrict)
+  evidence        RequestEvidence[]
+  @@index([status, educationLevel, createdAt])
+}
+
+model VolunteerProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  skills      String[] @default([])
+  interests   String[] @default([])
+  availability String?
+  serviceArea String?
+  preference  String?
+  experience  String?  @db.Text
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VolunteerOpportunity {
+  id                 String       @id @default(uuid())
+  organizationId     String
+  title              String
+  description        String       @db.Text
+  requiredSkills     String[]     @default([])
+  capacity           Int
+  startsAt           DateTime?
+  durationMinutes    Int?
+  generalLocation    String?
+  isRemote           Boolean      @default(false)
+  minimumAge         Int?
+  safetyInstructions String?      @db.Text
+  applicationDeadline DateTime?
+  status             ReviewStatus @default(PENDING)
+  isDemo             Boolean      @default(false)
+  createdAt          DateTime     @default(now())
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  applications       VolunteerApplication[]
+  @@index([status, generalLocation, startsAt])
+}
+
+model VolunteerApplication {
+  id            String            @id @default(uuid())
+  opportunityId String
+  userId        String
+  message       String?           @db.Text
+  status        ApplicationStatus @default(PENDING)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  opportunity   VolunteerOpportunity @relation(fields: [opportunityId], references: [id], onDelete: Restrict)
+  user          User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  assignment    VolunteerAssignment?
+  @@unique([opportunityId, userId])
+  @@index([userId, status])
+}
+
+model VolunteerAssignment {
+  id              String               @id @default(uuid())
+  applicationId   String               @unique
+  volunteerId     String
+  submittedMinutes Int                  @default(0)
+  confirmedMinutes Int                  @default(0)
+  status          ApplicationStatus    @default(ACCEPTED)
+  organizerNote   String?              @db.Text
+  completedAt     DateTime?
+  application     VolunteerApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  volunteer       User                 @relation("VolunteerAssignmentUser", fields: [volunteerId], references: [id], onDelete: Restrict)
+}
+
+model EmergencyRequest {
+  id              String          @id @default(uuid())
+  requesterId     String
+  reviewerId      String?
+  title           String
+  needDescription String          @db.Text
+  category        String
+  requestedAmount Int?
+  requestedGoods  String?
+  currency        String          @default("INR") @db.Char(3)
+  urgency         Int
+  deadline        DateTime?
+  generalLocation String?
+  status          EmergencyStatus @default(REPORTED)
+  isDemo          Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  requester       User            @relation("EmergencyRequester", fields: [requesterId], references: [id], onDelete: Restrict)
+  reviewer        User?           @relation("EmergencyReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  evidence        RequestEvidence[]
+  @@index([status, urgency, createdAt])
+}
+
+model RequestEvidence {
+  id                 String             @id @default(uuid())
+  educationRequestId String?
+  emergencyRequestId String?
+  uploadedById       String
+  storageKey         String
+  mimeType           String
+  visibility         EvidenceVisibility @default(PRIVATE)
+  createdAt          DateTime           @default(now())
+  educationRequest   EducationRequest?  @relation(fields: [educationRequestId], references: [id], onDelete: Restrict)
+  emergencyRequest   EmergencyRequest?  @relation(fields: [emergencyRequestId], references: [id], onDelete: Restrict)
+  uploadedBy         User               @relation("EvidenceUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  @@index([educationRequestId])
+  @@index([emergencyRequestId])
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String           @db.Text
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, readAt, createdAt])
+}
+
+model AbuseReport {
+  id          String   @id @default(uuid())
+  reporterId  String?
+  targetType  String
+  targetId    String
+  reason      String    @db.Text
+  status      ReviewStatus @default(PENDING)
+  createdAt   DateTime  @default(now())
+  reporter    User?     @relation("AbuseReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+  @@index([targetType, targetId, status])
+}
+
+model ModerationAction {
+  id          String   @id @default(uuid())
+  actorId     String
+  targetType  String
+  targetId    String
+  action      String
+  reason      String    @db.Text
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  actor       User      @relation("ModeratorActor", fields: [actorId], references: [id], onDelete: Restrict)
+  @@index([targetType, targetId, createdAt])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorId     String?
+  action      String
+  entityType  String
+  entityId    String
+  before      Json?
+  after       Json?
+  ipHash      String?
+  createdAt   DateTime @default(now())
+  actor       User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  @@index([entityType, entityId, createdAt])
+}

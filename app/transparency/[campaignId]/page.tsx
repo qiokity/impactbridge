@@ -1,0 +1,12 @@
+import { notFound } from "next/navigation";
+import { Badge } from "@/components/badge";
+import { formatDate, formatINR } from "@/lib/format";
+import { getTransparency } from "@/lib/content";
+import { summarizeLedger } from "@/lib/ledger";
+
+export const dynamic = "force-dynamic";
+export default async function TransparencyPage({ params }: { params: Promise<{ campaignId: string }> }) {
+  const campaign = await getTransparency((await params).campaignId); if (!campaign) notFound();
+  const summary = summarizeLedger(campaign.ledgerEntries);
+  return <><section className="page-hero"><div className="shell"><p className="eyebrow">Public transparency</p><h1>{campaign.title}</h1><p>Append-only financial events and approved expense records. Entries are not a guarantee that spending was honest.</p></div></section><section className="content"><div className="shell"><div className="stats-grid"><div className="stat"><strong>{formatINR(summary.confirmedDonations)}</strong><span>confirmed donations</span></div><div className="stat"><strong>{formatINR(summary.refunds)}</strong><span>refunds</span></div><div className="stat"><strong>{formatINR(summary.recordedExpenses)}</strong><span>approved expenses</span></div><div className="stat"><strong>{formatINR(summary.remainingFunds)}</strong><span>recorded balance</span></div></div><div className="section"><h2>Financial event history</h2><div className="card">{campaign.ledgerEntries.length ? campaign.ledgerEntries.map((entry) => <div className="ledger-row" key={entry.id}><span><Badge>{entry.type.replaceAll("_", " ")}</Badge><br />{entry.description}</span><span>{formatDate(entry.occurredAt)}</span><strong className={entry.amount < 0 ? "negative" : "positive"}>{formatINR(entry.amount)}</strong></div>) : <p>No public ledger events have been recorded.</p>}</div></div><div><h2>Approved expense records</h2><p className="helper-text">Only reviewed records intended for public display appear here; private receipts remain restricted.</p><div className="grid">{campaign.expenses.map((expense) => <div className="card" key={expense.id}><div className="card-footer"><Badge tone="success">Approved</Badge><strong>{formatINR(expense.amount)}</strong></div><h3>{expense.category}</h3><p>{expense.description}</p><p className="helper-text">{expense.vendor ?? "Vendor not shown"} · {formatDate(expense.transactionDate)}</p></div>)}</div></div></div></section></>;
+}
